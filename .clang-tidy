@@ -1,0 +1,26 @@
+---
+Checks: >
+  bugprone-*,
+  cppcoreguidelines-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -readability-braces-around-statements,
+  -readability-magic-numbers
+
+WarningsAsErrors: ''
+
+CheckOptions:
+  - key:             modernize-use-trailing-return-type
+    value:           '0' # Отключаем принудительный синтаксис auto f() -> int
+  - key:             readability-identifier-naming.NamespaceCase
+    value:           lower_case
+  - key:             readability-identifier-naming.ClassCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.StructCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.FunctionCase
+    value:           camelBack
+...

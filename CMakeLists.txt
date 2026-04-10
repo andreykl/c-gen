@@ -1,9 +1,29 @@
 cmake_minimum_required(VERSION 3.15)
-project(c-gen LANGUAGES CXX)
+project(c-gen LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+include(FetchContent)
+
+FetchContent_Declare(
+  afranchuk_prettyprint
+  GIT_REPOSITORY https://github.com/afranchuk/prettyprint
+  GIT_TAG        master
+)
+FetchContent_MakeAvailable(afranchuk_prettyprint)
+
+add_library(afranchuk_prettyprint_lib STATIC 
+    ${afranchuk_prettyprint_SOURCE_DIR}/src/prettyprint.c
+    ${afranchuk_prettyprint_SOURCE_DIR}/src/prettyprintcpp.cpp
+)
+
+target_compile_definitions(afranchuk_prettyprint_lib PRIVATE PRETTYPRINT_CPP_INTERNAL=1)
+
+target_include_directories(afranchuk_prettyprint_lib PUBLIC 
+    ${afranchuk_prettyprint_SOURCE_DIR}/src
+)
 
 find_package(pugixml REQUIRED)
 
@@ -21,6 +41,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     pugixml
+    afranchuk_prettyprint_lib
 )
 
 if(NOT MSVC)
