@@ -1,12 +1,16 @@
 #include <iostream>
-#include <prettyprint.h>
+
+#include <c-gen/target/ast.hpp>
+#include <c-gen/target/codewriter.hpp>
 
 const int DOC_WIDTH = 80;
 
+using namespace cgen::target;
+
 auto main() -> int {
-  auto doc = pp::group(pp::text("void") + pp::softbreak() + pp::text("main()"));
-  auto settings = std::cout << pp::set_width(DOC_WIDTH);
-  settings << doc << std::endl;
+  auto expr = Fab::extPorts();
+  auto writer = CodeWriter(std::cout, DOC_WIDTH);
+  writer.write(expr);
 
   return 0;
 }

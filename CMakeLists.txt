@@ -31,6 +31,7 @@ set(SOURCES
     src/main.cpp
     src/xml_parser.cpp
     src/transformer.cpp
+    src/codewriter.cpp
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
