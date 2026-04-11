@@ -1,6 +1,6 @@
-#include "c-gen/target/codewriter.hpp"
-#include "c-gen/target/ast.hpp"
-// #include <functional>
+#include <c-gen/target/ast.hpp>
+#include <c-gen/target/codewriter.hpp>
+
 #include <prettyprint.h>
 #include <variant>
 
@@ -9,26 +9,19 @@ using namespace pp;
 
 namespace cgen::target {
 
-// using namespace prettyprint;
+// soft break -- either a new line or an empty string
+auto inline sfbr() -> shared_ptr<doc> { return softbreak(); }
+// space break -- either a new line or a space
+auto inline spbr() -> shared_ptr<doc> { return line_or(" "); }
+// just a space
+auto inline space() -> shared_ptr<doc> { return text(" "); }
 
-// Helper for visiting variants
-template <class... Ts> struct overloaded : Ts... {
-  using Ts::operator()...;
-};
-template <class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
-
-auto space() -> shared_ptr<doc> { return text(" "); }
-
-template <typename T, typename F>
-/* auto separate(const shared_ptr<doc> &sep, const vector<T> &items,
-              const function<shared_ptr<doc>(const T &)> &transform)
-    -> shared_ptr<doc> { */
-auto separate(const shared_ptr<doc> &sep, const vector<const T> &items,
-              F transform) -> shared_ptr<doc> {
+// to print array in example
+auto separate(const shared_ptr<doc> &sep,
+              const vector<shared_ptr<doc>> &items) -> shared_ptr<doc> {
   shared_ptr<doc> result = nil();
   for (size_t i = 0; i < items.size(); ++i) {
-    const shared_ptr<doc> t = transform(items[i]);
-    result = result + t;
+    result = result + items[i];
     if (i < items.size() - 1) {
       result = result + sep;
     }
@@ -36,69 +29,56 @@ auto separate(const shared_ptr<doc> &sep, const vector<const T> &items,
   return result;
 }
 
+static auto to_doc(const Expr &expr) -> std::shared_ptr<doc>;
+
+static auto to_doc(const File &f) -> shared_ptr<doc> {
+  return text("\"") + text("this is file") + text("\"");
+}
+
+static auto to_doc(const StringLiteral &v) -> shared_ptr<doc> {
+  return text("\"") + text(v.value) + text("\"");
+}
+
+static auto to_doc(const RawLiteral &v) -> shared_ptr<doc> {
+  return text(v.value);
+}
+
+static auto to_doc(const StructInit &s) -> shared_ptr<doc> {
+  vector<shared_ptr<doc>> fields;
+  for (const auto &f : s.fields) {
+    fields.push_back(to_doc(f));
+  }
+  // group() decides if it's one line or multi-line
+  return group(
+      text("{") + spbr() +
+      nest(4, separate(text(",") + spbr(), fields) + spbr() + text("}")));
+}
+
+static auto to_doc(const ArrayInit &a) -> shared_ptr<doc> {
+  vector<shared_ptr<doc>> rows;
+  for (const auto &r : a.elements) {
+    rows.push_back(to_doc(r));
+  }
+
+  shared_ptr<doc> prefix = nil();
+  if (a.is_static)
+    prefix = prefix + text("static") + spbr();
+  if (a.is_const)
+    prefix = prefix + text("const") + spbr();
+
+  return group(
+      group(prefix + text(a.type_name) + spbr() + text(a.variable_name) +
+            text("[] =") + spbr()) +
+      nest(4, text("{") + nest(4, spbr() + separate(text(",") + spbr(), rows)) +
+                  spbr() + text("};")));
+}
+
 /**
  * @brief Recursive function to convert AST nodes to PrettyPrint Documents.
  */
-auto toDoc(const Expr &expr) -> shared_ptr<doc> {
-  return visit(
-      overloaded{// 1. String literal: adds quotes around the value
-                 [](const File &f) {
-                   return text("\"") + text("this is file") + text("\"");
-                 },
-                 [](const StringLiteral &v) {
-                   return text("\"") + text(v.value) + text("\"");
-                 },
-
-                 // 2. Raw literal: prints value as is (numbers, pointers, etc.)
-                 [](const RawLiteral &v) { return text(v.value); },
-
-                 // 3. Struct initializer: { a, b, c }
-                 [](const StructInit &s) {
-                   vector<shared_ptr<doc>> fields;
-                   for (const auto &f : s.fields) {
-                     fields.push_back(toDoc(f));
-                   }
-                   return group(text("{") + space() +
-                                nest(2, text("hellooooooo") + space()) +
-                                space() + text("}"));
-
-                   // group() decides if it's one line or multi-line
-                   /*return group(
-                       text("{") + space() +
-                       nest(2, separate(text(",") + space(), fields,
-                                        [](const Expr &e) -> shared_ptr<doc> {
-                                          return toDoc(e);
-                                        })) +
-                       space() + text("}"));
-                        */
-                 },
-
-                 // 4. Array of structs: static const Type Name[] = { ... };
-                 [](const ArrayInit &a) {
-                   vector<shared_ptr<doc>> rows;
-                   for (const auto &r : a.elements) {
-                     // Convert each StructInit to doc
-                     rows.push_back(toDoc(Expr(r)));
-                   }
-
-                   shared_ptr<doc> prefix = nil();
-                   if (a.is_static)
-                     prefix = prefix + text("static") + space();
-                   if (a.is_const)
-                     prefix = prefix + text("const") + space();
-
-                   return group(prefix + text(a.type_name) + space() +
-                                text(a.variable_name) + text("[] =") + line() +
-                                text("{") +
-                                nest(4, line() + text("worlddddddddddd") +
-                                            line() + text("}")));
-                   // nest(4, line() +
-                   //             separate(text(",") + line(), rows,
-                   //                      [](const Expr &e) { return toDoc(e);
-                   //                      })) +
-                   // line() + text("};"));
-                 }},
-      expr);
+static auto to_doc(const Expr &expr) -> std::shared_ptr<doc> {
+  return std::visit(
+      [](const auto &concrete_node) { return to_doc(concrete_node); }, expr);
 }
 
 CodeWriter::CodeWriter(std::ostream &out, int width)
@@ -107,7 +87,7 @@ CodeWriter::CodeWriter(std::ostream &out, int width)
 CodeWriter::~CodeWriter() = default;
 
 void CodeWriter::write(const Expr &expr) {
-  auto d = toDoc(expr);
+  auto d = to_doc(expr);
   auto settings = std::cout << pp::set_width(width_);
   settings << d << std::endl;
 }

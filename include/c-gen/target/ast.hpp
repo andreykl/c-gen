@@ -64,7 +64,7 @@ public:
                      row({str("feedback"), raw("&nwocg.feedback"), inum(1)}),
                      row({str("setpoint"), raw("&nwocg.setpoint"), inum(1)}),
                      row({inum(0), inum(0), inum(0)})};
-    return ArrayInit{AccessKey{}, "nwocg_ExtPort", "ext_ports[]", true,
+    return ArrayInit{AccessKey{}, "nwocg_ExtPort", "ext_ports", true,
                      true,        elements};
   }
 
