@@ -1,8 +1,10 @@
 #pragma once
 #include <prettyprint.h>
 #include <string>
-#include <variant>
 #include <vector>
+
+#include <boost/variant.hpp>
+#include <boost/variant/recursive_wrapper.hpp>
 
 using namespace std;
 
@@ -28,48 +30,153 @@ struct PPDoc {
   shared_ptr<pp::doc> doc;
 };
 
-struct StructInit;
-struct ArrayInit;
+// struct StructInit;
+// struct ArrayInit;
 struct File;
-struct PStruct;
+// struct PStruct;
+struct StructDecl;
+struct Assignment;
+struct VarDecl;
+struct ListInit;
+struct FunDecl;
 
-using Expr = variant<RawLiteral, StringLiteral, PPDoc, File, StructInit,
-                     ArrayInit, PStruct>;
+using Expr = boost::variant<
+    RawLiteral, StringLiteral, PPDoc, boost::recursive_wrapper<File>,
+    // boost::recursive_wrapper<StructInit>,
+    // boost::recursive_wrapper<ArrayInit>,
+    // boost::recursive_wrapper<PStruct>,
+    boost::recursive_wrapper<StructDecl>, boost::recursive_wrapper<Assignment>,
+    boost::recursive_wrapper<VarDecl>, boost::recursive_wrapper<ListInit>,
+    boost::recursive_wrapper<FunDecl>>;
 
 struct File {
-  explicit File(AccessKey, vector<Expr> exprs) : exprs(std::move(exprs)) {}
-  vector<Expr> exprs;
+  struct Statement {
+    explicit Statement(bool semicolon, bool linebreak, Expr expr)
+        : semicolon(semicolon), linebreak(linebreak), expr(std::move(expr)) {}
+    bool semicolon;
+    bool linebreak;
+    Expr expr;
+  };
+  explicit File(AccessKey, vector<Statement> stmts) : stmts(std::move(stmts)) {}
+  vector<Statement> stmts;
 };
 
-struct StructInit {
-  explicit StructInit(AccessKey, vector<Expr> fields)
+// struct StructInit {
+//   explicit StructInit(AccessKey, vector<Expr> fields)
+//       : fields(std::move(fields)) {}
+//   vector<Expr> fields;
+// };
+
+// struct ArrayInit {
+//   explicit ArrayInit(AccessKey, string type, string name, bool s, bool c,
+//                      vector<Expr> elements)
+//       : type_name(std::move(type)), variable_name(std::move(name)),
+//         is_static(s), is_const(c), elements(std::move(elements)) {}
+//   string type_name;
+//   string variable_name;
+//   bool is_static = true;
+//   bool is_const = true;
+//   vector<Expr> elements;
+// };
+
+// struct PStruct {
+//   explicit PStruct(AccessKey, string name, bool s, vector<Expr> fields)
+//       : variable_name(std::move(name)), is_static(s),
+//         fields(std::move(fields)) {}
+//   string variable_name;
+//   bool is_static = true;
+//   vector<Expr> fields;
+// };
+
+struct StructDecl {
+  struct Field {
+    Expr type;
+    string name;
+  };
+  explicit StructDecl(AccessKey, vector<Field> fields)
       : fields(std::move(fields)) {}
-  vector<Expr> fields;
+  vector<Field> fields;
 };
 
-struct ArrayInit {
-  explicit ArrayInit(AccessKey, string type, string name, bool s, bool c,
-                     vector<Expr> elements)
-      : type_name(std::move(type)), variable_name(std::move(name)),
-        is_static(s), is_const(c), elements(std::move(elements)) {}
-  string type_name;
-  string variable_name;
-  bool is_static = true;
-  bool is_const = true;
+struct Assignment {
+  explicit Assignment(AccessKey, Expr lhs, Expr rhs)
+      : lhs(std::move(lhs)), rhs(std::move(rhs)) {}
+  Expr lhs;
+  Expr rhs;
+};
+
+struct VarDecl {
+  explicit VarDecl(AccessKey, Expr type, string name, bool is_static,
+                   bool is_const)
+      : type(std::move(type)), name(std::move(name)), is_static(is_static),
+        is_const(is_const) {}
+  Expr type;
+  string name;
+  bool is_static;
+  bool is_const;
+};
+
+struct ListInit {
+  explicit ListInit(AccessKey, vector<Expr> elements)
+      : elements(std::move(elements)) {}
   vector<Expr> elements;
 };
 
-struct PStruct {
-  explicit PStruct(AccessKey, string name, bool s, vector<Expr> fields)
-      : variable_name(std::move(name)), is_static(s),
-        fields(std::move(fields)) {}
-  string variable_name;
-  bool is_static = true;
-  vector<Expr> fields;
+struct FunDecl {
+  explicit FunDecl(AccessKey, Expr type, string name, vector<Expr> body)
+      : type(std::move(type)), name(std::move(name)), body(std::move(body)) {}
+  Expr type;
+  string name;
+  vector<Expr> body;
 };
 
 class Fab {
 public:
+  static auto
+  test_file(const vector<pair<string, pair<string, int>>> &ext_ports_elems,
+            const vector<string> &pstruct_fields,
+            const vector<pair<string, double>> &init_fields,
+            const vector<Operation> &step_fields) -> File {
+    vector<Expr> elems;
+    for (const auto &e : ext_ports_elems) {
+      elems.emplace_back(
+          row({str(e.first), raw(e.second.first), inum(e.second.second)}));
+    }
+    elems.emplace_back(row({inum(0), inum(0), inum(0)}));
+    vector<File::Statement> stmts = {include("#include \"nwocg_run.h\""),
+                                     include("#include <math.h>", true)};
+
+    stmts.emplace_back(true, true, pstruct(pstruct_fields));
+    stmts.emplace_back(true, true, ext_ports(elems));
+
+    auto gen_ext_ports =
+        assign(var_decl(raw("nwocg_ExtPort * const"),
+                        "nwocg_generated_ext_ports", false, true),
+               raw("ext_ports"));
+    stmts.emplace_back(true, true, gen_ext_ports);
+
+    auto gen_ext_ports_size = assign(
+        var_decl(raw("size_t"), "nwocg_generated_ext_ports_size", false, true),
+        raw("sizeof(ext_ports)"));
+    stmts.emplace_back(true, false, gen_ext_ports_size);
+
+    return File{AccessKey{}, stmts};
+  }
+
+private:
+  static inline auto row(vector<Expr> fields) -> ListInit {
+    return ListInit{AccessKey{}, std::move(fields)};
+  }
+
+  static inline auto raw(string v) -> RawLiteral {
+    return RawLiteral{AccessKey{}, std::move(v)};
+  }
+
+  static inline auto include(const string &s,
+                             bool linebreak = false) -> File::Statement {
+    return File::Statement{false, linebreak, raw(s)};
+  }
+
   static inline auto str(string v) -> StringLiteral {
     return StringLiteral{AccessKey{}, std::move(v)};
   }
@@ -82,55 +189,41 @@ public:
     return PPDoc{AccessKey{}, doc};
   }
 
-  static inline auto ext_ports(const vector<Expr> &elements) -> ArrayInit {
-    return ArrayInit{AccessKey{}, "nwocg_ExtPort", "ext_ports", true,
-                     true,        elements};
+  static inline auto assign(Expr lhs, Expr rhs) -> Assignment {
+    return Assignment{AccessKey{}, std::move(lhs), std::move(rhs)};
   }
 
-  static auto pstruct(const vector<string> &fields) -> PStruct {
-    vector<Expr> flds;
+  static inline auto var_decl(Expr type, string name, bool is_static = false,
+                              bool is_const = false) -> VarDecl {
+    return VarDecl{AccessKey{}, std::move(type), std::move(name), is_static,
+                   is_const};
+  }
+
+  static inline auto list_init(vector<Expr> elements) -> ListInit {
+    return ListInit{AccessKey{}, std::move(elements)};
+  }
+
+  static inline auto
+  struct_decl(vector<StructDecl::Field> fields) -> StructDecl {
+    return StructDecl{AccessKey{}, std::move(fields)};
+  }
+
+  static inline auto ext_ports(const vector<Expr> &elements) -> Assignment {
+    return assign(var_decl(raw("nwocg_ExtPort"), "ext_ports[]", true, true),
+                  list_init(elements));
+  }
+
+  static auto pstruct(const vector<string> &fields) -> VarDecl {
+    vector<StructDecl::Field> flds;
     for (const auto &f : fields) {
-      flds.emplace_back(raw("double " + f + ";"));
+      flds.push_back({raw("double"), f});
     }
-    return PStruct{AccessKey{}, "nwocg", true, flds};
+    return var_decl(struct_decl(flds), "nwocg", true, false);
   }
 
-  static auto
-  test_file(const vector<pair<string, pair<string, int>>> &ext_ports_elems,
-            const vector<string> &pstruct_fields) -> File {
-    vector<Expr> elems;
-    for (const auto &e : ext_ports_elems) {
-      elems.emplace_back(
-          row({str(e.first), raw(e.second.first), inum(e.second.second)}));
-    }
-    elems.emplace_back(row({inum(0), inum(0), inum(0)}));
-    vector<Expr> exprs = {raw("#include \"nwocg_run.h\""),
-                          raw("#include <math.h>")};
-
-    exprs.emplace_back(pstruct(pstruct_fields));
-
-    exprs.emplace_back(ext_ports(elems));
-
-    auto gen_ext_ports =
-        pp::group(pp::text("const nwocg_ExtPort * const") + pp::line_or(" ")) +
-        pp::group(pp::text("nwocg_generated_ext_ports = ext_ports;"));
-    exprs.emplace_back(ppdoc(gen_ext_ports));
-    auto gen_ext_ports_size =
-        pp::group(pp::text("const size_t") + pp::line_or(" ")) +
-        pp::group(pp::text("nwocg_generated_ext_ports_size =") +
-                  pp::line_or(" ")) +
-        pp::group(pp::text("sizeof(ext_ports)"));
-    exprs.emplace_back(ppdoc(gen_ext_ports_size));
-    return File{AccessKey{}, exprs};
-  }
-
-private:
-  static inline auto row(vector<Expr> fields) -> StructInit {
-    return StructInit{AccessKey{}, std::move(fields)};
-  }
-
-  static inline auto raw(string v) -> RawLiteral {
-    return RawLiteral{AccessKey{}, std::move(v)};
+  static inline auto fun_decl(const Expr &type, const string &name,
+                              const vector<Expr> &body) -> FunDecl {
+    return FunDecl{AccessKey{}, type, name, body};
   }
 };
 
