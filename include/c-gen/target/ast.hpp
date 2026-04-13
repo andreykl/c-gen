@@ -16,12 +16,12 @@ class AccessKey {
 };
 
 struct RawLiteral {
-  explicit RawLiteral(AccessKey, string v) : value(std::move(v)) {}
+  explicit RawLiteral(AccessKey, string value) : value(std::move(value)) {}
   string value;
 };
 
 struct StringLiteral {
-  explicit StringLiteral(AccessKey, string v) : value(std::move(v)) {}
+  explicit StringLiteral(AccessKey, string value) : value(std::move(value)) {}
   string value;
 };
 
@@ -36,15 +36,12 @@ struct Assignment;
 struct VarDecl;
 struct ListInit;
 struct FunDecl;
-struct Operation;
-struct InitField;
 
 using Expr = boost::variant<
     RawLiteral, StringLiteral, PPDoc, boost::recursive_wrapper<File>,
     boost::recursive_wrapper<StructDecl>, boost::recursive_wrapper<Assignment>,
     boost::recursive_wrapper<VarDecl>, boost::recursive_wrapper<ListInit>,
-    boost::recursive_wrapper<FunDecl>, boost::recursive_wrapper<Operation>,
-    boost::recursive_wrapper<InitField>>;
+    boost::recursive_wrapper<FunDecl>>;
 
 struct File {
   struct Statement {
