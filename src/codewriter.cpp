@@ -103,6 +103,7 @@ struct to_doc_visitor {
     return result + boost::apply_visitor(*this, v.type) + space() +
            text(v.name);
   }
+
   /**
    * @brief Convert a File node to a document (expressions separated by blank
    * lines).
