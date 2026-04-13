@@ -106,7 +106,7 @@ struct to_doc_visitor {
 
   /**
    * @brief Convert a File node to a document (expressions separated by blank
-   * lines).
+   * lines adding ; when needed).
    */
   auto operator()(const File &f) const -> shared_ptr<doc> {
     return separate(line(), f.stmts, [this](File::Statement const &e) {
