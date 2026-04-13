@@ -30,24 +30,21 @@ struct PPDoc {
   shared_ptr<pp::doc> doc;
 };
 
-// struct StructInit;
-// struct ArrayInit;
 struct File;
-// struct PStruct;
 struct StructDecl;
 struct Assignment;
 struct VarDecl;
 struct ListInit;
 struct FunDecl;
+struct Operation;
+struct InitField;
 
 using Expr = boost::variant<
     RawLiteral, StringLiteral, PPDoc, boost::recursive_wrapper<File>,
-    // boost::recursive_wrapper<StructInit>,
-    // boost::recursive_wrapper<ArrayInit>,
-    // boost::recursive_wrapper<PStruct>,
     boost::recursive_wrapper<StructDecl>, boost::recursive_wrapper<Assignment>,
     boost::recursive_wrapper<VarDecl>, boost::recursive_wrapper<ListInit>,
-    boost::recursive_wrapper<FunDecl>>;
+    boost::recursive_wrapper<FunDecl>, boost::recursive_wrapper<Operation>,
+    boost::recursive_wrapper<InitField>>;
 
 struct File {
   struct Statement {
@@ -60,33 +57,6 @@ struct File {
   explicit File(AccessKey, vector<Statement> stmts) : stmts(std::move(stmts)) {}
   vector<Statement> stmts;
 };
-
-// struct StructInit {
-//   explicit StructInit(AccessKey, vector<Expr> fields)
-//       : fields(std::move(fields)) {}
-//   vector<Expr> fields;
-// };
-
-// struct ArrayInit {
-//   explicit ArrayInit(AccessKey, string type, string name, bool s, bool c,
-//                      vector<Expr> elements)
-//       : type_name(std::move(type)), variable_name(std::move(name)),
-//         is_static(s), is_const(c), elements(std::move(elements)) {}
-//   string type_name;
-//   string variable_name;
-//   bool is_static = true;
-//   bool is_const = true;
-//   vector<Expr> elements;
-// };
-
-// struct PStruct {
-//   explicit PStruct(AccessKey, string name, bool s, vector<Expr> fields)
-//       : variable_name(std::move(name)), is_static(s),
-//         fields(std::move(fields)) {}
-//   string variable_name;
-//   bool is_static = true;
-//   vector<Expr> fields;
-// };
 
 struct StructDecl {
   struct Field {
@@ -130,12 +100,48 @@ struct FunDecl {
   vector<Expr> body;
 };
 
+struct Operation {
+  explicit Operation(AccessKey, Assignment value) : value(std::move(value)) {}
+  Assignment value;
+};
+
+struct InitField {
+  explicit InitField(AccessKey, Assignment value) : value(std::move(value)) {}
+  Assignment value;
+};
+
 class Fab {
 public:
+  static inline auto op(const string &lfield, const string &rlfield,
+                        const string &op, const string &rrfield) -> Operation {
+    return Operation{AccessKey{}, Assignment{AccessKey{}, raw(nwf(lfield)),
+                                             raw(nwf(rlfield) + " " + op + " " +
+                                                 nwf(rrfield))}};
+  }
+
+  static inline auto op(const string &lfield, const string &rlfield,
+                        const string &op, const double val) -> Operation {
+    return Operation{AccessKey{}, Assignment{AccessKey{}, raw(nwf(lfield)),
+                                             raw(nwf(rlfield) + " " + op + " " +
+                                                 to_string(val))}};
+  }
+
+  static inline auto op(const string &lfield,
+                        const string &rfield) -> Operation {
+    return Operation{AccessKey{}, Assignment{AccessKey{}, raw(nwf(lfield)),
+                                             raw(nwf(rfield))}};
+  }
+
+  static inline auto init_field(const string &field,
+                                const double val) -> InitField {
+    return InitField{AccessKey{}, Assignment{AccessKey{}, raw(nwf(field)),
+                                             raw(to_string(val))}};
+  }
+
   static auto
   test_file(const vector<pair<string, pair<string, int>>> &ext_ports_elems,
             const vector<string> &pstruct_fields,
-            const vector<pair<string, double>> &init_fields,
+            const vector<InitField> &init_fields,
             const vector<Operation> &step_fields) -> File {
     vector<Expr> elems;
     for (const auto &e : ext_ports_elems) {
@@ -147,6 +153,9 @@ public:
                                      include("#include <math.h>", true)};
 
     stmts.emplace_back(true, true, pstruct(pstruct_fields));
+    stmts.emplace_back(false, true, generated_init(init_fields));
+    stmts.emplace_back(false, true, generated_step(step_fields));
+
     stmts.emplace_back(true, true, ext_ports(elems));
 
     auto gen_ext_ports =
@@ -164,6 +173,24 @@ public:
   }
 
 private:
+  static auto generated_init(const vector<InitField> &init_fields) -> FunDecl {
+    vector<Expr> body;
+    for (const auto &f : init_fields)
+      body.emplace_back(f.value);
+
+    return fun_decl(raw("void"), "nwocg_generated_init", body);
+  }
+
+  static auto generated_step(const vector<Operation> &step_fields) -> FunDecl {
+    vector<Expr> body;
+    for (const auto &f : step_fields)
+      body.emplace_back(f.value);
+
+    return fun_decl(raw("void"), "nwocg_generated_step", body);
+  }
+
+  static inline auto nwf(const string &f) -> string { return "nwocg." + f; }
+
   static inline auto row(vector<Expr> fields) -> ListInit {
     return ListInit{AccessKey{}, std::move(fields)};
   }

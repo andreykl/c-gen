@@ -1,8 +1,8 @@
-// General principles:
+// General guidlines:
 // 1) The ';' character is emitted by the outer printing function, not by to_doc
-// itself. 2) Do not wrap the to_doc result in group() inside the function
-// itself --
-//    the outer function should do that if needed.
+// itself
+// 2) Do not wrap the to_doc result in group() inside the function
+// itself -- the outer function should do that if needed.
 
 #include <c-gen/target/ast.hpp>
 #include <c-gen/target/codewriter.hpp>
@@ -101,52 +101,6 @@ static auto to_doc(const RawLiteral &v) -> shared_ptr<doc> {
  */
 static auto to_doc(const PPDoc &d) -> shared_ptr<doc> { return d.doc; }
 
-// /**
-//  * @brief Convert a StructInit to a brace-enclosed, comma-separated field
-//  * list.
-//  */
-// static auto to_doc(const StructInit &s) -> shared_ptr<doc> {
-//   return text("{") + spbr() +
-//          nest(4, separate(text(",") + spbr(), s.fields,
-//                           [](const auto &e) { return to_doc(e); }) +
-//                      spbr() + text("}"));
-// }
-
-// /**
-//  * @brief Convert an ArrayInit to a full array definition with storage
-//  * qualifiers.
-//  */
-// static auto to_doc(const ArrayInit &a) -> shared_ptr<doc> {
-//   shared_ptr<doc> prefix = nil();
-//   if (a.is_static)
-//     prefix = prefix + text("static") + spbr();
-//   if (a.is_const)
-//     prefix = prefix + text("const") + spbr();
-//
-//   auto elements = separate(text(",") + spbr(), a.elements,
-//                            [](const auto &e) { return to_doc(e); });
-//   return group(prefix + text(a.type_name) + spbr() +
-//                text(a.variable_name) + text("[] =")) +
-//          line() + text("{") + nest(4, line() + elements) + spbr() +
-//          text("}");
-// }
-
-// /**
-//  * @brief Convert a PStruct to a static struct definition with named fields.
-//  */
-// static auto to_doc(const PStruct &p) -> shared_ptr<doc> {
-//   shared_ptr<doc> prefix = nil();
-//   if (p.is_static)
-//     prefix = prefix + text("static") + space();
-//   prefix = prefix + text("struct") + line() + "{";
-//
-//   return prefix +
-//          nest(4, group(line() +
-//                        separate(line(), p.fields,
-//                                 [](const auto &e) { return to_doc(e); }))) +
-//          line() + text("} " + p.variable_name + ";");
-// }
-
 /**
  * @brief Convert a StructDecl to "struct { type1 name1; type2 name2; ... }".
  */
@@ -183,11 +137,20 @@ static auto to_doc(const VarDecl &v) -> shared_ptr<doc> {
  * @brief Convert a ListInit to a brace-enclosed, comma-separated element list.
  */
 static auto to_doc(const ListInit &l) -> shared_ptr<doc> {
-  return text("{") + spbr() +
-         nest(4,
-              group(separate(text(",") + spbr(), l.elements,
-                             [](const auto &e) { return group(to_doc(e)); }))) +
-         spbr() + text("}");
+  auto elements = separate(text(",") + spbr(), l.elements,
+                           [](const auto &e) { return group(to_doc(e)); });
+  return text("{") + nest(4, spbr() + group(elements)) + spbr() + text("}");
+}
+
+/**
+ * @brief Convert a FunDecl to 'type fun_name { body; }'
+ */
+static auto to_doc(const FunDecl &decl) -> shared_ptr<doc> {
+  auto body = separate(text(";") + spbr(), decl.body,
+                       [](const auto &e) { return group(to_doc(e)); });
+  return group(to_doc(decl.type)) + space() + text(decl.name + "()") + space() +
+         text("{") + nest(4, spbr() + group(body + text(";"))) + spbr() +
+         text("}");
 }
 
 /**
