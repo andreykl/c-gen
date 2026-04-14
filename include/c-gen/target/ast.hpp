@@ -24,11 +24,6 @@ struct StringLiteral {
   string value;
 };
 
-struct PPDoc {
-  explicit PPDoc(AccessKey, shared_ptr<pp::doc> doc) : doc(std::move(doc)) {}
-  shared_ptr<pp::doc> doc;
-};
-
 struct File;
 struct StructDecl;
 struct Assignment;
@@ -37,7 +32,7 @@ struct ListInit;
 struct FunDecl;
 
 using Expr = boost::variant<
-    RawLiteral, StringLiteral, PPDoc, boost::recursive_wrapper<File>,
+    RawLiteral, StringLiteral, boost::recursive_wrapper<File>,
     boost::recursive_wrapper<StructDecl>, boost::recursive_wrapper<Assignment>,
     boost::recursive_wrapper<VarDecl>, boost::recursive_wrapper<ListInit>,
     boost::recursive_wrapper<FunDecl>>;
@@ -206,10 +201,6 @@ private:
 
   static inline auto inum(int v) -> RawLiteral {
     return RawLiteral{AccessKey{}, to_string(v)};
-  }
-
-  static inline auto ppdoc(const shared_ptr<pp::doc> &doc) -> PPDoc {
-    return PPDoc{AccessKey{}, doc};
   }
 
   static inline auto assign(Expr lhs, Expr rhs) -> Assignment {
