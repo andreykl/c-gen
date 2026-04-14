@@ -155,16 +155,12 @@ struct to_doc_visitor {
   }
 };
 
-CodeWriter::CodeWriter(std::ostream &out, int width) : out(out), width(width) {}
-
-CodeWriter::~CodeWriter() = default;
-
 /**
  * @brief Render the given expression to the output stream.
  */
-void CodeWriter::write(const Expr &expr) {
+void CodeWriter::write(const Expr &expr) const {
   auto d = boost::apply_visitor(to_doc_visitor{}, expr);
-  auto settings = out << pp::set_width(width);
+  auto settings = *out << pp::set_width(width);
   settings << d << std::endl;
 }
 
