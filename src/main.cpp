@@ -33,9 +33,7 @@ auto main() -> int {
   g.add_line("25", "26", "1");
   g.add_line("26", "22", "1");
 
-  auto expr = g.transform();
-  auto writer = cgen::target::CodeWriter(std::cout, DOC_WIDTH);
-  writer.write(expr);
+  g.transform(CodeWriter(std::cout, DOC_WIDTH));
 
   return 0;
 }

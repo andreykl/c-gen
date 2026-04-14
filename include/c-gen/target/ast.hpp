@@ -104,26 +104,28 @@ struct InitField {
 
 class Fab {
 public:
-  static inline auto op(string lfield, string rlfield, string op,
-                        string rrfield) -> Operation {
-    auto rhs = raw(format("{} {} {}", nwf(std::move(rlfield)), op,
-                          nwf(std::move(rrfield))));
+  static inline auto op_sum(string lfield, int rlsign, string rlfield,
+                            int rrsign, string rrfield) -> Operation {
+    auto rhs = raw(format("{} * {} + {} * {}", rlsign, nwf(std::move(rlfield)),
+                          rrsign, nwf(std::move(rrfield))));
     return Operation{AccessKey{},
                      Assignment{AccessKey{}, raw(nwf(std::move(lfield))), rhs}};
   }
 
-  static inline auto op(string lfield, string rlfield, string op,
-                        const double val) -> Operation {
+  static inline auto op_gain(string lfield, int rlsign, string rlfield,
+                             double val) -> Operation {
     auto rhs =
-        raw(format("{} {} {}", nwf(std::move(rlfield)), op, to_string(val)));
+        raw(format("{} * {} * {}", rlsign, nwf(std::move(rlfield)), val));
     return Operation{AccessKey{},
                      Assignment{AccessKey{}, raw(nwf(std::move(lfield))), rhs}};
   }
 
-  static inline auto op(string lfield, string rfield) -> Operation {
-    return Operation{AccessKey{},
-                     Assignment{AccessKey{}, raw(nwf(std::move(lfield))),
-                                raw(nwf(std::move(rfield)))}};
+  static inline auto op_delay(string lfield, int sign,
+                              string rfield) -> Operation {
+    return Operation{
+        AccessKey{},
+        Assignment{AccessKey{}, raw(nwf(std::move(lfield))),
+                   raw(format("{} * {}", sign, nwf(std::move(rfield))))}};
   }
 
   static inline auto init_field(string field, const double val) -> InitField {
