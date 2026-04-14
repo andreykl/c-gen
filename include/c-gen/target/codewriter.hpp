@@ -18,8 +18,8 @@ public:
   void write(const Expr &expr);
 
 private:
-  std::ostream &out_;
-  int width_;
+  std::ostream &out;
+  int width;
 };
 
 } // namespace cgen::target

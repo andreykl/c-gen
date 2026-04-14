@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(c-gen LANGUAGES CXX C)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -25,6 +25,7 @@ target_include_directories(afranchuk_prettyprint_lib PUBLIC
     ${afranchuk_prettyprint_SOURCE_DIR}/src
 )
 
+find_package(Boost REQUIRED)
 find_package(pugixml REQUIRED)
 
 set(SOURCES
@@ -42,6 +43,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     pugixml
+    Boost::boost
     afranchuk_prettyprint_lib
 )
 
