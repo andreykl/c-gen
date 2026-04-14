@@ -1,4 +1,5 @@
 #pragma once
+#include <format>
 #include <string>
 #include <vector>
 
@@ -103,30 +104,32 @@ struct InitField {
 
 class Fab {
 public:
-  static inline auto op(const string &lfield, const string &rlfield,
-                        const string &op, const string &rrfield) -> Operation {
-    return Operation{AccessKey{}, Assignment{AccessKey{}, raw(nwf(lfield)),
-                                             raw(nwf(rlfield) + " " + op + " " +
-                                                 nwf(rrfield))}};
+  static inline auto op(string lfield, string rlfield, string op,
+                        string rrfield) -> Operation {
+    auto rhs = raw(format("{} {} {}", nwf(std::move(rlfield)), op,
+                          nwf(std::move(rrfield))));
+    return Operation{AccessKey{},
+                     Assignment{AccessKey{}, raw(nwf(std::move(lfield))), rhs}};
   }
 
-  static inline auto op(const string &lfield, const string &rlfield,
-                        const string &op, const double val) -> Operation {
-    return Operation{AccessKey{}, Assignment{AccessKey{}, raw(nwf(lfield)),
-                                             raw(nwf(rlfield) + " " + op + " " +
-                                                 to_string(val))}};
+  static inline auto op(string lfield, string rlfield, string op,
+                        const double val) -> Operation {
+    auto rhs =
+        raw(format("{} {} {}", nwf(std::move(rlfield)), op, to_string(val)));
+    return Operation{AccessKey{},
+                     Assignment{AccessKey{}, raw(nwf(std::move(lfield))), rhs}};
   }
 
-  static inline auto op(const string &lfield,
-                        const string &rfield) -> Operation {
-    return Operation{AccessKey{}, Assignment{AccessKey{}, raw(nwf(lfield)),
-                                             raw(nwf(rfield))}};
+  static inline auto op(string lfield, string rfield) -> Operation {
+    return Operation{AccessKey{},
+                     Assignment{AccessKey{}, raw(nwf(std::move(lfield))),
+                                raw(nwf(std::move(rfield)))}};
   }
 
-  static inline auto init_field(const string &field,
-                                const double val) -> InitField {
-    return InitField{AccessKey{}, Assignment{AccessKey{}, raw(nwf(field)),
-                                             raw(to_string(val))}};
+  static inline auto init_field(string field, const double val) -> InitField {
+    return InitField{AccessKey{},
+                     Assignment{AccessKey{}, raw(nwf(std::move(field))),
+                                raw(to_string(val))}};
   }
 
   static auto
@@ -147,20 +150,20 @@ public:
     stmts.emplace_back(false, true, generated_init(init_fields));
     stmts.emplace_back(false, true, generated_step(step_fields));
 
-    stmts.emplace_back(true, true, ext_ports(elems));
+    stmts.emplace_back(true, true, ext_ports(std::move(elems)));
 
     auto gen_ext_ports =
         assign(var_decl(raw("nwocg_ExtPort * const"),
                         "nwocg_generated_ext_ports", false, true),
                raw("ext_ports"));
-    stmts.emplace_back(true, true, gen_ext_ports);
+    stmts.emplace_back(true, true, std::move(gen_ext_ports));
 
     auto gen_ext_ports_size = assign(
         var_decl(raw("size_t"), "nwocg_generated_ext_ports_size", false, true),
         raw("sizeof(ext_ports)"));
-    stmts.emplace_back(true, false, gen_ext_ports_size);
+    stmts.emplace_back(true, false, std::move(gen_ext_ports_size));
 
-    return File{AccessKey{}, stmts};
+    return File{AccessKey{}, std::move(stmts)};
   }
 
 private:
@@ -169,7 +172,7 @@ private:
     for (const auto &f : init_fields)
       body.emplace_back(f.value);
 
-    return fun_decl(raw("void"), "nwocg_generated_init", body);
+    return fun_decl(raw("void"), "nwocg_generated_init", std::move(body));
   }
 
   static auto generated_step(const vector<Operation> &step_fields) -> FunDecl {
@@ -177,10 +180,10 @@ private:
     for (const auto &f : step_fields)
       body.emplace_back(f.value);
 
-    return fun_decl(raw("void"), "nwocg_generated_step", body);
+    return fun_decl(raw("void"), "nwocg_generated_step", std::move(body));
   }
 
-  static inline auto nwf(const string &f) -> string { return "nwocg." + f; }
+  static inline auto nwf(string f) -> string { return "nwocg." + f; }
 
   static inline auto row(vector<Expr> fields) -> ListInit {
     return ListInit{AccessKey{}, std::move(fields)};
@@ -190,9 +193,9 @@ private:
     return RawLiteral{AccessKey{}, std::move(v)};
   }
 
-  static inline auto include(const string &s,
+  static inline auto include(string s,
                              bool linebreak = false) -> File::Statement {
-    return File::Statement{false, linebreak, raw(s)};
+    return File::Statement{false, linebreak, raw(std::move(s))};
   }
 
   static inline auto str(string v) -> StringLiteral {
@@ -222,9 +225,9 @@ private:
     return StructDecl{AccessKey{}, std::move(fields)};
   }
 
-  static inline auto ext_ports(const vector<Expr> &elements) -> Assignment {
+  static inline auto ext_ports(vector<Expr> elements) -> Assignment {
     return assign(var_decl(raw("nwocg_ExtPort"), "ext_ports[]", true, true),
-                  list_init(elements));
+                  list_init(std::move(elements)));
   }
 
   static auto pstruct(const vector<string> &fields) -> VarDecl {
@@ -232,12 +235,13 @@ private:
     for (const auto &f : fields) {
       flds.push_back({raw("double"), f});
     }
-    return var_decl(struct_decl(flds), "nwocg", true, false);
+    return var_decl(struct_decl(std::move(flds)), "nwocg", true, false);
   }
 
-  static inline auto fun_decl(const Expr &type, const string &name,
-                              const vector<Expr> &body) -> FunDecl {
-    return FunDecl{AccessKey{}, type, name, body};
+  static inline auto fun_decl(Expr type, string name,
+                              vector<Expr> body) -> FunDecl {
+    return FunDecl{AccessKey{}, std::move(type), std::move(name),
+                   std::move(body)};
   }
 };
 
