@@ -134,11 +134,6 @@ struct to_doc_visitor {
   }
 
   /**
-   * @brief Unwrap a PPDoc node (already holds a document).
-   */
-  auto operator()(const PPDoc &d) const -> shared_ptr<doc> { return d.doc; }
-
-  /**
    * @brief Convert a StructDecl to "struct { type1 name1; type2 name2; ...
    }".
    */
