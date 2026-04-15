@@ -21,17 +21,17 @@ auto main() -> int {
   g.add_unit_delay("Unit Delay1", "21", -1);
   g.add_outport("command", "20");
 
-  g.add_line("16", "17", "1");
-  g.add_line("18", "17", "2");
-  g.add_line("17", "25", "1");
-  g.add_line("17", "19", "1");
-  g.add_line("21", "22", "2");
-  g.add_line("22", "21", "1");
-  g.add_line("22", "23", "2");
-  g.add_line("19", "23", "1");
-  g.add_line("23", "20", "1");
-  g.add_line("25", "26", "1");
-  g.add_line("26", "22", "1");
+  g.add_line("16", "17", 0);
+  g.add_line("18", "17", 1);
+  g.add_line("17", "25", 0);
+  g.add_line("17", "19", 0);
+  g.add_line("21", "22", 1);
+  g.add_line("22", "21", 0);
+  g.add_line("22", "23", 1);
+  g.add_line("19", "23", 0);
+  g.add_line("23", "20", 0);
+  g.add_line("25", "26", 0);
+  g.add_line("26", "22", 0);
 
   g.transform(CodeWriter(std::cout, DOC_WIDTH));
 

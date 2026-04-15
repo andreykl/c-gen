@@ -58,7 +58,7 @@ public:
    *
    * @param expr The AST root or node to be printed.
    */
-  void write(const Expr &expr) const override;
+  void write(const api::File &file) const override;
 
 private:
   std::ostream *out;

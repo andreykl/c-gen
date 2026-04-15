@@ -1,12 +1,14 @@
 #include <c-gen/target/ast.hpp>
 #include <c-gen/target/iwriter.hpp>
 #include <format>
-#include <ranges>
+// #include <ranges>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 using namespace std;
+using namespace cgen::target::api;
 
 namespace cgen::source {
 auto node_err_info(string type, string name, string SID) -> string {
@@ -137,32 +139,32 @@ public:
     outportSID = std::move(SID);
   }
 
-  auto add_line(string fromSID, string toSID, string to_port) -> void {
+  auto add_line(string fromSID, string toSID,
+                int to_port_ind /* index of port in ins */) -> void {
     if (!nodes.contains(toSID)) {
-      throw std::runtime_error(
-          get_add_line_err1(std::move(fromSID), std::move(toSID),
-                            std::move(to_port), std::move(toSID)));
+      throw std::runtime_error(get_add_line_err1(
+          std::move(fromSID), std::move(toSID), to_port_ind, std::move(toSID)));
     }
 
     if (!nodes.contains(fromSID)) {
+      throw std::runtime_error(get_add_line_err1(std::move(fromSID),
+                                                 std::move(toSID), to_port_ind,
+                                                 std::move(fromSID)));
+    }
+
+    if (nodes.at(toSID).ins.size() - 1 < to_port_ind) {
       throw std::runtime_error(
-          get_add_line_err1(std::move(fromSID), std::move(toSID),
-                            std::move(to_port), std::move(fromSID)));
+          get_add_line_err2(std::move(fromSID), std::move(toSID), to_port_ind));
     }
 
-    if (!nodes.at(toSID).portmapping.contains(to_port)) {
-      throw std::runtime_error(get_add_line_err2(
-          std::move(fromSID), std::move(toSID), std::move(to_port)));
-    }
-
-    nodes.at(toSID).ins[nodes.at(toSID).portmapping.at(to_port)].fromSID =
-        std::move(fromSID);
+    nodes.at(toSID).ins[to_port_ind].fromSID = std::move(fromSID);
   }
 
-  auto traverse(const Node &node, vector<target::Operation> &steps,
-                vector<target::Operation> &delays,
+  auto traverse(const Node &node, vector<Operation> &steps,
+                vector<Operation> &delays, vector<Port> &ports,
+                vector<string> &struct_fields, vector<InitField> &init_fields,
                 unordered_set<string> &visited,
-                unordered_set<string> &in_progress) -> void {
+                unordered_set<string> &in_progress) const -> void {
     using enum Node::Type;
     using namespace target;
 
@@ -178,28 +180,44 @@ public:
       return; // we have already visited this node, but this can happen i.e. in
               // diamond case
     }
+
+    // std::cout << "here\n";
+
     if (UnitDelay == node.type) {
-      delays.emplace_back(Fab::op_delay(node.name, node.ins[0].sign,
-                                        node_name(node.ins[0].fromSID)));
+      auto nname = clean(node.name);
+      delays.emplace_back(Fab::op_delay(nname, node.ins[0].sign,
+                                        node_name_cl(node.ins[0].fromSID)));
+      struct_fields.push_back(nname);
+      init_fields.push_back(Fab::init_field(nname, 0));
     } else {
       in_progress.insert(node.SID);
 
-      for (const auto &in : node.ins) {
-        traverse(nodes.at(in.fromSID), steps, delays, visited, in_progress);
+      if (Inport != node.type) {
+        for (const auto &in : node.ins) {
+          traverse(nodes.at(in.fromSID), steps, delays, ports, struct_fields,
+                   init_fields, visited, in_progress);
+        }
       }
+
+      auto nname = clean(node.name);
 
       if (Sum == node.type) {
         steps.emplace_back(Fab::op_sum(
-            node.name, node.ins[0].sign, node_name(node.ins[0].fromSID),
-            node.ins[1].sign, node_name(node.ins[1].fromSID)));
+            nname, node.ins[0].sign, node_name_cl(node.ins[0].fromSID),
+            node.ins[1].sign, node_name_cl(node.ins[1].fromSID)));
+        struct_fields.push_back(nname);
       } else if (Gain == node.type) {
-        steps.emplace_back(Fab::op_gain(node.name, node.ins[0].sign,
-                                        node_name(node.ins[0].fromSID),
+        steps.emplace_back(Fab::op_gain(nname, node.ins[0].sign,
+                                        node_name_cl(node.ins[0].fromSID),
                                         node.gain));
+        struct_fields.push_back(nname);
       } else if (Inport == node.type) {
+        ports.emplace_back(Fab::inport(nname, nname, node.ins[0].sign));
+        struct_fields.push_back(nname);
         // just skip, no node need to calculate when we face Inport
       } else if (Outport == node.type) {
-
+        ports.emplace_back(
+            Fab::outport(nname, node_name_cl(node.ins[0].fromSID)));
       } else {
         // impossible case: node type is UnitDelay or
         // a new node type has been added
@@ -207,35 +225,31 @@ public:
             format("Unexpected node type faced '{}'. Interrupting.",
                    Node::to_string(node.type)));
       }
-    }
 
-    for (auto &in : node.ins) {
-      in.fromSID
+      in_progress.erase(node.SID);
+      visited.insert(node.SID);
     }
-    * /
   }
 
   auto transform(const target::IWriter &writer) const -> void {
-    using namespace cgen::target;
+    vector<InitField> init_fields;
+    vector<Operation> steps, delays;
+    vector<Port> ports;
+    vector<string> struct_fields;
+    unordered_set<string> visited, in_progress;
 
-    vector<InitField> init_fields = {Fab::init_field("UnitDelay1", 0)};
-    vector<Operation> step_fields = {
-        Fab::op("Add1", "setpoint", "-", "feedback"),
-        Fab::op("I_gain", "Add1", "*", 2),
-        Fab::op("Ts", "I_gain", "*", 0.01),
-        Fab::op("P_gain", "Add1", "*", 3),
-        Fab::op("Add2", "Ts", "+", "UnitDelay1"),
-        Fab::op("Add3", "P_gain", "+", "Add2"),
-        Fab::op("UnitDelay1", "Add2")};
+    traverse(nodes.at(outportSID), steps, delays, ports, struct_fields,
+             init_fields, visited, in_progress);
 
-    File expr = Fab::test_file({{"command", {"&nwocg.Add3", 0}},
-                                {"feedback", {"&nwocg.feedback", 1}},
-                                {"setpoint", {"&nwocg.setpoint", 1}}},
-                               {"setpoint", "feedback", "Add1", "I_gain", "Ts",
-                                "P_gain", "UnitDelay1", "Add2", "Add3"},
-                               init_fields, step_fields);
+    vector<Operation> step_fields;
+    step_fields.reserve(steps.size() + delays.size());
+    step_fields.insert(step_fields.end(), steps.begin(), steps.end());
+    step_fields.insert(step_fields.end(), delays.begin(), delays.end());
 
-    writer.write(expr);
+    vector<Port> reversed_ports(ports.rbegin(), ports.rend());
+
+    writer.write(
+        Fab::file(reversed_ports, struct_fields, init_fields, step_fields));
   }
 
 private:
@@ -243,22 +257,21 @@ private:
   string outportSID;
   unordered_set<string> inportSIDs;
 
-  inline auto get_add_line_err1(string fromSID, string toSID, string to_port,
+  inline auto get_add_line_err1(string fromSID, string toSID, int to_port_ind,
                                 string SID) const -> string {
     return format(
         "We try to add line from node SID '{}' to node SID '{}' (port '{}'), "
         "but we have not faced SID '{}' yet. Interrupting.",
-        std::move(fromSID), std::move(toSID), std::move(to_port),
-        std::move(SID));
+        std::move(fromSID), std::move(toSID), to_port_ind, std::move(SID));
   }
 
   inline auto get_add_line_err2(string fromSID, string toSID,
-                                string to_port) const -> string {
+                                int to_port_ind) const -> string {
     return format("We try to add line from node SID '{}' to node SID '{}' "
                   "(port '{}'), but node with SID '{}' does not contain port "
                   "with name '{}'. Interrupting.",
-                  std::move(fromSID), std::move(toSID), std::move(to_port),
-                  std::move(toSID), std::move(to_port));
+                  std::move(fromSID), std::move(toSID), to_port_ind,
+                  std::move(toSID), to_port_ind);
   }
 
   auto add_node(Node &&node) -> void {
@@ -274,6 +287,13 @@ private:
     nodes.insert({node.SID, std::move(node)});
   };
 
-  auto node_name(string SID) -> string { return nodes.at(SID).name; }
+  auto node_name_cl(string SID) const -> string {
+    return clean(nodes.at(SID).name);
+  }
+
+  auto clean(string name) const -> string {
+    std::erase_if(name, [](unsigned char c) { return std::isspace(c); });
+    return name;
+  }
 };
 } // namespace cgen::source

@@ -30,8 +30,6 @@ find_package(pugixml REQUIRED)
 
 set(SOURCES
     src/main.cpp
-    src/xml_parser.cpp
-    src/transform.cpp
     src/codewriter.cpp
 )
 

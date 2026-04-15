@@ -158,7 +158,8 @@ struct to_doc_visitor {
 /**
  * @brief Render the given expression to the output stream.
  */
-void CodeWriter::write(const Expr &expr) const {
+void CodeWriter::write(const api::File &file) const {
+  Expr expr = file.value;
   auto d = boost::apply_visitor(to_doc_visitor{}, expr);
   auto settings = *out << pp::set_width(width);
   settings << d << std::endl;

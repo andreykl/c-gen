@@ -14,7 +14,7 @@ public:
    * @brief Writes the AST expression to the target.
    * Const-qualified to support temporary writer objects.
    */
-  virtual void write(const Expr &expr) const = 0;
+  virtual void write(const api::File &file) const = 0;
 };
 
 } // namespace cgen::target

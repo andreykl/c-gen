@@ -9,9 +9,12 @@
 using namespace std;
 
 namespace cgen::target {
+namespace api {
+class Fab;
+}
 
 class AccessKey {
-  friend class Fab;
+  friend class api::Fab;
   AccessKey() = default;
 };
 
@@ -92,6 +95,7 @@ struct FunDecl {
   vector<Expr> body;
 };
 
+namespace api {
 struct Operation {
   explicit Operation(AccessKey, Assignment value) : value(std::move(value)) {}
   Assignment value;
@@ -102,8 +106,30 @@ struct InitField {
   Assignment value;
 };
 
+struct Port {
+  explicit Port(AccessKey, ListInit value) : value(std::move(value)) {}
+  ListInit value;
+};
+
+struct File {
+  explicit File(AccessKey, target::File value) : value(std::move(value)) {}
+  target::File value;
+};
+
 class Fab {
 public:
+  static inline auto inport(string port_name, string field, int sign) -> Port {
+    return Port{AccessKey{},
+                row({str(std::move(port_name)),
+                     raw(format("&{}", nwf(std::move(field)))), inum(sign)})};
+  }
+
+  static inline auto outport(string port_name, string field) -> Port {
+    return Port{AccessKey{},
+                row({str(std::move(port_name)),
+                     raw(format("&{}", nwf(std::move(field)))), inum(0)})};
+  }
+
   static inline auto op_sum(string lfield, int rlsign, string rlfield,
                             int rrsign, string rrfield) -> Operation {
     auto rhs = raw(format("{} * {} + {} * {}", rlsign, nwf(std::move(rlfield)),
@@ -131,22 +157,22 @@ public:
   static inline auto init_field(string field, const double val) -> InitField {
     return InitField{AccessKey{},
                      Assignment{AccessKey{}, raw(nwf(std::move(field))),
-                                raw(to_string(val))}};
+                                raw(format("{}", val))}};
   }
 
-  static auto
-  test_file(const vector<pair<string, pair<string, int>>> &ext_ports_elems,
-            const vector<string> &pstruct_fields,
-            const vector<InitField> &init_fields,
-            const vector<Operation> &step_fields) -> File {
+  static auto file(const vector<Port> &ext_ports_elems,
+                   const vector<string> &pstruct_fields,
+                   const vector<InitField> &init_fields,
+                   const vector<Operation> &step_fields) -> File {
     vector<Expr> elems;
     for (const auto &e : ext_ports_elems) {
-      elems.emplace_back(
-          row({str(e.first), raw(e.second.first), inum(e.second.second)}));
+      elems.emplace_back(e.value);
     }
     elems.emplace_back(row({inum(0), inum(0), inum(0)}));
-    vector<File::Statement> stmts = {include("#include \"nwocg_run.h\""),
-                                     include("#include <math.h>", true)};
+
+    vector<target::File::Statement> stmts = {
+        include("#include \"nwocg_run.h\""),
+        include("#include <math.h>", true)};
 
     stmts.emplace_back(true, true, pstruct(pstruct_fields));
     stmts.emplace_back(false, true, generated_init(init_fields));
@@ -165,7 +191,7 @@ public:
         raw("sizeof(ext_ports)"));
     stmts.emplace_back(true, false, std::move(gen_ext_ports_size));
 
-    return File{AccessKey{}, std::move(stmts)};
+    return File{AccessKey{}, target::File{AccessKey{}, std::move(stmts)}};
   }
 
 private:
@@ -195,9 +221,9 @@ private:
     return RawLiteral{AccessKey{}, std::move(v)};
   }
 
-  static inline auto include(string s,
-                             bool linebreak = false) -> File::Statement {
-    return File::Statement{false, linebreak, raw(std::move(s))};
+  static inline auto
+  include(string s, bool linebreak = false) -> target::File::Statement {
+    return target::File::Statement{false, linebreak, raw(std::move(s))};
   }
 
   static inline auto str(string v) -> StringLiteral {
@@ -246,5 +272,5 @@ private:
                    std::move(body)};
   }
 };
-
+} // namespace api
 } // namespace cgen::target
