@@ -44,7 +44,7 @@ make
 
 ```bash
 
-./c-gen testfile.xml
+./c-gen ../testfile.xml
 
 ```
 
