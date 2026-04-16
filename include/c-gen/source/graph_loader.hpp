@@ -1,9 +1,12 @@
 #pragma once
+#include <boost/algorithm/string.hpp>
 #include <c-gen/source/graph.hpp>
 #include <format>
+#include <fstream>
 #include <pugixml.hpp>
+#include <ranges>
 #include <sstream>
-#include <string>
+// #include <string>
 #include <vector>
 
 using namespace std;
@@ -12,8 +15,8 @@ namespace cgen::source {
 
 class GraphLoader {
 public:
-  static auto load_from_file(const std::string &filename) -> Graph {
-    std::ifstream file(filename);
+  static auto load_from_file(const string &filename) -> Graph {
+    ifstream file(filename);
     if (!file.is_open()) {
       throw runtime_error(format("Could not open file: {}", filename));
     }
@@ -37,12 +40,18 @@ private:
     Graph graph;
     string current_element;
 
-    [[noreturn]] void throw_error(string message) const;
+    [[noreturn]] void throw_error(string message) const {
+      throw runtime_error(
+          format("Error during building a graph. {}. Interrupting.", message));
+    }
     [[noreturn]] void throw_error_with_block_info(string message, string name,
-                                                  string SID) const;
+                                                  string SID) const {
+      throw_error(
+          format("{}. Node info name '{}', SID '{}'.", message, name, SID));
+    }
   };
 
-  std::vector<string> parse_array_portnames(const string &text) {
+  static auto parse_array_portnames(const string &text) -> vector<string> {
     vector<string> result;
     size_t start = text.find('[');
     size_t end = text.find(']');
@@ -63,14 +72,14 @@ private:
     return result;
   }
 
-  vector<int> parse_signs(const string &text) {
-    vector<string> result;
+  static auto parse_signs(const string &text) -> vector<int> {
+    vector<int> result;
 
     for (unsigned char ch : text) {
       if ('+' == ch) {
-        result.push_back(1)
+        result.push_back(1);
       } else if ('-' == ch) {
-        result.push_back(-1)
+        result.push_back(-1);
       } else if (isspace(static_cast<unsigned char>(ch))) {
         // skip spaces
       } else {
@@ -81,6 +90,26 @@ private:
     }
 
     return result;
+  }
+
+  static auto parse_line_value(const string s) -> pair<string, int> {
+    stringstream val(s);
+    string sid, type, port;
+    if (getline(val, sid, '#')) {
+      if (getline(val, type, ':')) {
+        if (getline(val, port)) {
+          return {boost::trim_copy(sid), std::stoi(port)};
+        }
+        throw runtime_error(
+            "parse_line_value: wrong value format, no port after ':' found");
+      } else {
+        throw runtime_error("parse_line_value: wrong value format, no ':' "
+                            "found or no type between '#' and ':'");
+      }
+    } else {
+      throw runtime_error("parse_line_value: wrong value format, no '#' found "
+                          "or no sid before it");
+    }
   }
 
   static void parse_root(ParseContext &ctx) {
@@ -114,24 +143,76 @@ private:
     if ("Inport" == type) {
       ctx.graph.add_inport(name, sid);
     } else if ("Sum" == type) {
-      vector<string> inputs = {"1"};
-      vector<int> signs = {1};
+      vector<string> inputs = {};
+      vector<int> signs = {};
       pugi::xpath_node xports = block.select_node("P[@Name='Ports']");
       if (xports) {
-        inputs = parse_array_portnames(xporst.node().text().as_string());
+        inputs = parse_array_portnames(xports.node().text().as_string());
       }
       pugi::xpath_node xsigns = block.select_node("P[@Name='Inputs']");
       if (xsigns) {
         signs = parse_signs(xsigns.node().text().as_string());
       }
       ctx.graph.add_sum(name, sid, inputs, signs);
+    } else if ("Gain" == type) {
+      double gain = 0;
+      pugi::xpath_node xgain = block.select_node("P[@Name='Gain']");
+      if (!xgain) {
+        ctx.throw_error_with_block_info(
+            "Gain does not contain gain information.", name, sid);
+      }
+      gain = xgain.node().text().as_double();
+      ctx.graph.add_gain(name, sid, gain);
+    } else if ("UnitDelay" == type) {
+      int sample_time = -1;
+      pugi::xpath_node xsample = block.select_node("P[@Name='SampleTime']");
+      if (!xsample) {
+        ctx.throw_error_with_block_info(
+            "UnitDelay does not contain sample time information.", name, sid);
+      }
+      sample_time = xsample.node().text().as_int();
+      ctx.graph.add_unit_delay(name, sid, sample_time);
+    } else if ("Outport" == type) {
+      ctx.graph.add_outport(name, sid);
     } else {
       ctx.throw_error_with_block_info(format("Unknown block type '{}'", type),
                                       name, sid);
     }
   }
 
-  static void parse_line(ParseContext &ctx, const pugi::xml_node &xml_line);
+  static void parse_line(ParseContext &ctx, const pugi::xml_node &line) {
+    pugi::xpath_node xnode = line.select_node("P[@Name='Src']");
+    if (!xnode) {
+      ctx.throw_error("line without Src");
+    }
+    auto [srcSID, _] = parse_line_value(xnode.node().text().as_string());
+
+    // auto branches = line.select_nodes("Branch");
+    // bool found = false;
+    // for (auto &branch : branches) {
+    //   xnode = branch.select_node("P[@Name='Dst']");
+    //   if (!xnode) {
+    //     ctx.throw_error(
+    //         "No P node with attribute Name='Dst' found for Branch node");
+    //   }
+    //   auto [dstSID, dst_port] =
+    //       parse_line_value(xnode.node().text().as_string());
+    //   found = true;
+    //   graph.add_line(srcSID, dstSID, dst_port - 1);
+    // }
+
+    auto ps = line.select_nodes(".//P[@Name='Dst']");
+    bool found = false;
+    for (auto &p : ps) {
+      auto [dstSID, dst_port] = parse_line_value(p.node().text().as_string());
+      found = true;
+      ctx.graph.add_line(srcSID, dstSID, dst_port - 1);
+    }
+
+    if (!found) {
+      ctx.throw_error("No P node with attribute Name='Dst' found for line");
+    }
+  }
 };
 
 } // namespace cgen::source

@@ -1,7 +1,8 @@
+#pragma once
 #include <c-gen/target/ast.hpp>
 #include <c-gen/target/iwriter.hpp>
 #include <format>
-// #include <ranges>
+#include <ranges>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -140,7 +141,7 @@ public:
   }
 
   auto add_line(string fromSID, string toSID,
-                int to_port_ind /* index of port in ins */) -> void {
+                size_t to_port_ind /* index of port in ins */) -> void {
     if (!nodes.contains(toSID)) {
       throw std::runtime_error(get_add_line_err1(
           std::move(fromSID), std::move(toSID), to_port_ind, std::move(toSID)));
