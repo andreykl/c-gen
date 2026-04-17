@@ -31,6 +31,9 @@ find_package(pugixml REQUIRED)
 set(SOURCES
     src/main.cpp
     src/codewriter.cpp
+    src/graph_loader.cpp
+    src/graph.cpp
+    src/node.cpp
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
