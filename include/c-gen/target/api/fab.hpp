@@ -1,26 +1,31 @@
 #pragma once
 #include <c-gen/target/api/iwriter.hpp>
 #include <c-gen/target/api/structs.hpp>
+#include <c-gen/target/common/concepts.hpp>
 #include <c-gen/target/core/ast.hpp>
 #include <format>
+#include <ranges>
 #include <string>
 
 namespace cgen::target::api {
 
 using namespace std;
+using namespace common::concepts;
 
 class Fab {
 public:
   static inline auto inport(string port_name, string field, int sign) -> Port {
     return Port{AccessKey{},
-                row({str(std::move(port_name)),
-                     raw(format("&{}", nwf(std::move(field)))), inum(sign)})};
+                row(vector<Expr>{str(std::move(port_name)),
+                                 raw(format("&{}", nwf(std::move(field)))),
+                                 inum(sign)})};
   }
 
   static inline auto outport(string port_name, string field) -> Port {
-    return Port{AccessKey{},
-                row({str(std::move(port_name)),
-                     raw(format("&{}", nwf(std::move(field)))), inum(0)})};
+    return Port{
+        AccessKey{},
+        row(vector<Expr>{str(std::move(port_name)),
+                         raw(format("&{}", nwf(std::move(field)))), inum(0)})};
   }
 
   static inline auto op_sum(string lfield, int rlsign, string rlfield,
@@ -53,15 +58,14 @@ public:
                                 raw(format("{}", val))}};
   }
 
-  static inline auto file(const vector<Port> &ext_ports_elems,
-                          const vector<string> &pstruct_fields,
-                          const vector<InitField> &init_fields,
-                          const vector<Operation> &step_fields) -> File {
-    vector<Expr> elems;
-    for (const auto &e : ext_ports_elems) {
-      elems.emplace_back(e.value);
-    }
-    elems.emplace_back(row({inum(0), inum(0), inum(0)}));
+  static inline auto file(RangeOf<Port> auto &&ext_ports_elems,
+                          RangeOf<string> auto &&pstruct_fields,
+                          RangeOf<InitField> auto &&init_fields,
+                          RangeOf<Operation> auto &&step_fields) -> File {
+    auto elems = ext_ports_elems | std::views::transform(&Port::value) |
+                 ranges::to<vector>();
+
+    elems.emplace_back(row(vector<Expr>{inum(0), inum(0), inum(0)}));
 
     vector<core::File::Statement> stmts = {include("#include \"nwocg_run.h\""),
                                            include("#include <math.h>", true)};
@@ -70,7 +74,7 @@ public:
     stmts.emplace_back(false, true, generated_init(init_fields));
     stmts.emplace_back(false, true, generated_step(step_fields));
 
-    stmts.emplace_back(true, true, ext_ports(std::move(elems)));
+    stmts.emplace_back(true, true, ext_ports(elems));
 
     auto gen_ext_ports =
         assign(var_decl(raw("nwocg_ExtPort * const"),
@@ -88,27 +92,21 @@ public:
 
 private:
   static inline auto
-  generated_init(const vector<InitField> &init_fields) -> FunDecl {
-    vector<Expr> body;
-    for (const auto &f : init_fields)
-      body.emplace_back(f.value);
-
-    return fun_decl(raw("void"), "nwocg_generated_init", std::move(body));
+  generated_init(RangeOf<InitField> auto &&init_fields) -> FunDecl {
+    return fun_decl(raw("void"), "nwocg_generated_init",
+                    init_fields | std::views::transform(&InitField::value));
   }
 
   static inline auto
-  generated_step(const vector<Operation> &step_fields) -> FunDecl {
-    vector<Expr> body;
-    for (const auto &f : step_fields)
-      body.emplace_back(f.value);
-
-    return fun_decl(raw("void"), "nwocg_generated_step", std::move(body));
+  generated_step(RangeOf<Operation> auto &&step_fields) -> FunDecl {
+    return fun_decl(raw("void"), "nwocg_generated_step",
+                    step_fields | std::views::transform(&Operation::value));
   }
 
   static inline auto nwf(string f) -> string { return "nwocg." + f; }
 
-  static inline auto row(vector<Expr> fields) -> ListInit {
-    return ListInit{AccessKey{}, std::move(fields)};
+  static inline auto row(RangeOf<Expr> auto &&fields) -> ListInit {
+    return ListInit{AccessKey{}, fields};
   }
 
   static inline auto raw(string v) -> RawLiteral {
@@ -138,32 +136,30 @@ private:
                    is_const};
   }
 
-  static inline auto list_init(vector<Expr> elements) -> ListInit {
+  static inline auto list_init(RangeOf<Expr> auto &&elements) -> ListInit {
     return ListInit{AccessKey{}, std::move(elements)};
   }
 
   static inline auto
-  struct_decl(vector<StructDecl::Field> fields) -> StructDecl {
-    return StructDecl{AccessKey{}, std::move(fields)};
+  struct_decl(RangeOf<StructDecl::Field> auto &&fields) -> StructDecl {
+    return StructDecl{AccessKey{}, fields};
   }
 
-  static inline auto ext_ports(vector<Expr> elements) -> Assignment {
+  static inline auto ext_ports(RangeOf<Expr> auto &&elements) -> Assignment {
     return assign(var_decl(raw("nwocg_ExtPort"), "ext_ports[]", true, true),
-                  list_init(std::move(elements)));
+                  list_init(elements));
   }
 
-  static inline auto pstruct(const vector<string> &fields) -> VarDecl {
-    vector<StructDecl::Field> flds;
-    for (const auto &f : fields) {
-      flds.push_back({raw("double"), f});
-    }
-    return var_decl(struct_decl(std::move(flds)), "nwocg", true, false);
+  static inline auto pstruct(RangeOf<string> auto &&fields) -> VarDecl {
+    return var_decl(struct_decl(fields | views::transform([](const auto &f) {
+                                  return StructDecl::Field{raw("double"), f};
+                                })),
+                    "nwocg", true, false);
   }
 
   static inline auto fun_decl(Expr type, string name,
-                              vector<Expr> body) -> FunDecl {
-    return FunDecl{AccessKey{}, std::move(type), std::move(name),
-                   std::move(body)};
+                              RangeOf<Expr> auto &&body) -> FunDecl {
+    return FunDecl{AccessKey{}, std::move(type), std::move(name), body};
   }
 };
 } // namespace cgen::target::api

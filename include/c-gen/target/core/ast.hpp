@@ -1,4 +1,5 @@
 #pragma once
+#include <c-gen/target/common/concepts.hpp>
 #include <vector>
 
 #include <boost/variant.hpp>
@@ -7,6 +8,9 @@
 using namespace std;
 
 namespace cgen::target {
+
+using namespace common::concepts;
+
 namespace api {
 class Fab;
 }
@@ -49,7 +53,8 @@ struct File {
     bool linebreak;
     Expr expr;
   };
-  explicit File(AccessKey, vector<Statement> stmts) : stmts(std::move(stmts)) {}
+  explicit File(AccessKey, RangeOf<Statement> auto &&stmts)
+      : stmts(ranges::begin(stmts), ranges::end(stmts)) {}
   vector<Statement> stmts;
 };
 
@@ -58,8 +63,8 @@ struct StructDecl {
     Expr type;
     string name;
   };
-  explicit StructDecl(AccessKey, vector<Field> fields)
-      : fields(std::move(fields)) {}
+  explicit StructDecl(AccessKey, RangeOf<Field> auto &&fields)
+      : fields(ranges::begin(fields), ranges::end(fields)) {}
   vector<Field> fields;
 };
 
@@ -82,14 +87,15 @@ struct VarDecl {
 };
 
 struct ListInit {
-  explicit ListInit(AccessKey, vector<Expr> elements)
-      : elements(std::move(elements)) {}
+  explicit ListInit(AccessKey, RangeOf<Expr> auto &&elements)
+      : elements(ranges::begin(elements), ranges::end(elements)) {}
   vector<Expr> elements;
 };
 
 struct FunDecl {
-  explicit FunDecl(AccessKey, Expr type, string name, vector<Expr> body)
-      : type(std::move(type)), name(std::move(name)), body(std::move(body)) {}
+  explicit FunDecl(AccessKey, Expr type, string name, RangeOf<Expr> auto &&body)
+      : type(std::move(type)), name(std::move(name)),
+        body(ranges::begin(body), ranges::end(body)) {}
   Expr type;
   string name;
   vector<Expr> body;

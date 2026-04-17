@@ -20,7 +20,7 @@ nwocg.setpoint - nwocg.feedback
 ## Сборка и запуск
 
 Проект использует библиотеки pugixml (тестировалось на версии 1.14), boost (1.83), 
-prettyprint ( https://github.com/afranchuk/prettyprint/tree/master ), систему сборки cmake (3.28.3), gcc (13.3.0). Сборка тестировалась под Ubuntu 24.04.4 (Для сборки на убунту вероятно нужно поставть пакет build-essential).
+prettyprint ( https://github.com/afranchuk/prettyprint/tree/master ), систему сборки cmake (3.28.3), gcc (14.2.0). Сборка тестировалась под Ubuntu 24.04.4 (Для сборки на убунту вероятно нужно поставть пакет build-essential).
 
 Для сборки нужен доступ к github.com (чтобы cmake скачал prettyprint).
 
