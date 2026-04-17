@@ -1,120 +1,13 @@
 #pragma once
+#include <c-gen/target/api/iwriter.hpp>
+#include <c-gen/target/api/structs.hpp>
+#include <c-gen/target/core/ast.hpp>
 #include <format>
 #include <string>
-#include <vector>
 
-#include <boost/variant.hpp>
-#include <boost/variant/recursive_wrapper.hpp>
+namespace cgen::target::api {
 
 using namespace std;
-
-namespace cgen::target {
-namespace api {
-class Fab;
-}
-
-class AccessKey {
-  friend class api::Fab;
-  AccessKey() = default;
-};
-
-struct RawLiteral {
-  explicit RawLiteral(AccessKey, string value) : value(std::move(value)) {}
-  string value;
-};
-
-struct StringLiteral {
-  explicit StringLiteral(AccessKey, string value) : value(std::move(value)) {}
-  string value;
-};
-
-struct File;
-struct StructDecl;
-struct Assignment;
-struct VarDecl;
-struct ListInit;
-struct FunDecl;
-
-using Expr = boost::variant<
-    RawLiteral, StringLiteral, boost::recursive_wrapper<File>,
-    boost::recursive_wrapper<StructDecl>, boost::recursive_wrapper<Assignment>,
-    boost::recursive_wrapper<VarDecl>, boost::recursive_wrapper<ListInit>,
-    boost::recursive_wrapper<FunDecl>>;
-
-struct File {
-  struct Statement {
-    explicit Statement(bool semicolon, bool linebreak, Expr expr)
-        : semicolon(semicolon), linebreak(linebreak), expr(std::move(expr)) {}
-    bool semicolon;
-    bool linebreak;
-    Expr expr;
-  };
-  explicit File(AccessKey, vector<Statement> stmts) : stmts(std::move(stmts)) {}
-  vector<Statement> stmts;
-};
-
-struct StructDecl {
-  struct Field {
-    Expr type;
-    string name;
-  };
-  explicit StructDecl(AccessKey, vector<Field> fields)
-      : fields(std::move(fields)) {}
-  vector<Field> fields;
-};
-
-struct Assignment {
-  explicit Assignment(AccessKey, Expr lhs, Expr rhs)
-      : lhs(std::move(lhs)), rhs(std::move(rhs)) {}
-  Expr lhs;
-  Expr rhs;
-};
-
-struct VarDecl {
-  explicit VarDecl(AccessKey, Expr type, string name, bool is_static,
-                   bool is_const)
-      : type(std::move(type)), name(std::move(name)), is_static(is_static),
-        is_const(is_const) {}
-  Expr type;
-  string name;
-  bool is_static;
-  bool is_const;
-};
-
-struct ListInit {
-  explicit ListInit(AccessKey, vector<Expr> elements)
-      : elements(std::move(elements)) {}
-  vector<Expr> elements;
-};
-
-struct FunDecl {
-  explicit FunDecl(AccessKey, Expr type, string name, vector<Expr> body)
-      : type(std::move(type)), name(std::move(name)), body(std::move(body)) {}
-  Expr type;
-  string name;
-  vector<Expr> body;
-};
-
-namespace api {
-struct Operation {
-  explicit Operation(AccessKey, Assignment value) : value(std::move(value)) {}
-  Assignment value;
-};
-
-struct InitField {
-  explicit InitField(AccessKey, Assignment value) : value(std::move(value)) {}
-  Assignment value;
-};
-
-struct Port {
-  explicit Port(AccessKey, ListInit value) : value(std::move(value)) {}
-  ListInit value;
-};
-
-struct File {
-  explicit File(AccessKey, target::File value) : value(std::move(value)) {}
-  target::File value;
-};
 
 class Fab {
 public:
@@ -160,19 +53,18 @@ public:
                                 raw(format("{}", val))}};
   }
 
-  static auto file(const vector<Port> &ext_ports_elems,
-                   const vector<string> &pstruct_fields,
-                   const vector<InitField> &init_fields,
-                   const vector<Operation> &step_fields) -> File {
+  static inline auto file(const vector<Port> &ext_ports_elems,
+                          const vector<string> &pstruct_fields,
+                          const vector<InitField> &init_fields,
+                          const vector<Operation> &step_fields) -> File {
     vector<Expr> elems;
     for (const auto &e : ext_ports_elems) {
       elems.emplace_back(e.value);
     }
     elems.emplace_back(row({inum(0), inum(0), inum(0)}));
 
-    vector<target::File::Statement> stmts = {
-        include("#include \"nwocg_run.h\""),
-        include("#include <math.h>", true)};
+    vector<core::File::Statement> stmts = {include("#include \"nwocg_run.h\""),
+                                           include("#include <math.h>", true)};
 
     stmts.emplace_back(true, true, pstruct(pstruct_fields));
     stmts.emplace_back(false, true, generated_init(init_fields));
@@ -191,11 +83,12 @@ public:
         raw("sizeof(ext_ports)"));
     stmts.emplace_back(true, false, std::move(gen_ext_ports_size));
 
-    return File{AccessKey{}, target::File{AccessKey{}, std::move(stmts)}};
+    return File{AccessKey{}, core::File{AccessKey{}, std::move(stmts)}};
   }
 
 private:
-  static auto generated_init(const vector<InitField> &init_fields) -> FunDecl {
+  static inline auto
+  generated_init(const vector<InitField> &init_fields) -> FunDecl {
     vector<Expr> body;
     for (const auto &f : init_fields)
       body.emplace_back(f.value);
@@ -203,7 +96,8 @@ private:
     return fun_decl(raw("void"), "nwocg_generated_init", std::move(body));
   }
 
-  static auto generated_step(const vector<Operation> &step_fields) -> FunDecl {
+  static inline auto
+  generated_step(const vector<Operation> &step_fields) -> FunDecl {
     vector<Expr> body;
     for (const auto &f : step_fields)
       body.emplace_back(f.value);
@@ -221,9 +115,9 @@ private:
     return RawLiteral{AccessKey{}, std::move(v)};
   }
 
-  static inline auto
-  include(string s, bool linebreak = false) -> target::File::Statement {
-    return target::File::Statement{false, linebreak, raw(std::move(s))};
+  static inline auto include(string s,
+                             bool linebreak = false) -> core::File::Statement {
+    return core::File::Statement{false, linebreak, raw(std::move(s))};
   }
 
   static inline auto str(string v) -> StringLiteral {
@@ -258,7 +152,7 @@ private:
                   list_init(std::move(elements)));
   }
 
-  static auto pstruct(const vector<string> &fields) -> VarDecl {
+  static inline auto pstruct(const vector<string> &fields) -> VarDecl {
     vector<StructDecl::Field> flds;
     for (const auto &f : fields) {
       flds.push_back({raw("double"), f});
@@ -272,5 +166,4 @@ private:
                    std::move(body)};
   }
 };
-} // namespace api
-} // namespace cgen::target
+} // namespace cgen::target::api

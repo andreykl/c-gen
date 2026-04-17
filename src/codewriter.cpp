@@ -4,8 +4,8 @@
 // 2) Do not wrap the to_doc result in group() inside the function
 // itself -- the outer function should do that if needed.
 
-#include <c-gen/target/ast.hpp>
 #include <c-gen/target/codewriter.hpp>
+#include <c-gen/target/core/ast.hpp>
 
 #include <prettyprint.h>
 
@@ -13,7 +13,7 @@ using namespace std;
 using namespace pp;
 
 namespace cgen::target {
-
+using namespace core;
 /**
  * @brief Soft break -- either a new line or an empty string.
  */
@@ -108,8 +108,8 @@ struct to_doc_visitor {
    * @brief Convert a File node to a document (expressions separated by blank
    * lines adding ; when needed).
    */
-  auto operator()(const File &f) const -> shared_ptr<doc> {
-    return separate(line(), f.stmts, [this](File::Statement const &e) {
+  auto operator()(const core::File &f) const -> shared_ptr<doc> {
+    return separate(line(), f.stmts, [this](core::File::Statement const &e) {
       auto res = boost::apply_visitor(*this, e.expr);
       if (e.semicolon)
         res = res + text(";");

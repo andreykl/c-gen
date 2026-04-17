@@ -1,6 +1,7 @@
 #pragma once
-#include <c-gen/target/ast.hpp>
-#include <c-gen/target/iwriter.hpp>
+#include <c-gen/target/api/fab.hpp>
+#include <c-gen/target/api/iwriter.hpp>
+#include <c-gen/target/api/structs.hpp>
 #include <format>
 #include <ranges>
 #include <string>
@@ -220,8 +221,7 @@ public:
         ports.emplace_back(
             Fab::outport(nname, node_name_cl(node.ins[0].fromSID)));
       } else {
-        // impossible case: node type is UnitDelay or
-        // a new node type has been added
+        // impossible case: a new node type has been added
         throw runtime_error(
             format("Unexpected node type faced '{}'. Interrupting.",
                    Node::to_string(node.type)));
@@ -232,7 +232,7 @@ public:
     }
   }
 
-  auto transform(const target::IWriter &writer) const -> void {
+  auto transform(const IWriter &writer) const -> void {
     vector<InitField> init_fields;
     vector<Operation> steps, delays;
     vector<Port> ports;

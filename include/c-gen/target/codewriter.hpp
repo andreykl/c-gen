@@ -1,10 +1,11 @@
 #pragma once
 
-#include <c-gen/target/ast.hpp>
-#include <c-gen/target/iwriter.hpp>
+#include <c-gen/target/api/iwriter.hpp>
+#include <c-gen/target/core/ast.hpp>
 #include <iostream>
 
 namespace cgen::target {
+using namespace api;
 
 /**
  * @brief Concrete implementation of IWriter for C code generation.
