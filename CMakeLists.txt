@@ -34,6 +34,7 @@ set(SOURCES
     src/graph_loader.cpp
     src/graph.cpp
     src/node.cpp
+    src/arith.cpp
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})

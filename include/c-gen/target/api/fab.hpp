@@ -2,6 +2,7 @@
 #include <c-gen/target/api/iwriter.hpp>
 #include <c-gen/target/api/structs.hpp>
 #include <c-gen/target/common/concepts.hpp>
+#include <c-gen/target/core/arith.hpp>
 #include <c-gen/target/core/ast.hpp>
 #include <format>
 #include <ranges>
@@ -30,27 +31,28 @@ public:
 
   static inline auto op_sum(string lfield, int rlsign, string rlfield,
                             int rrsign, string rrfield) -> Operation {
-    auto rhs = raw(format("{} * {} + {} * {}", rlsign, nwf(std::move(rlfield)),
-                          rrsign, nwf(std::move(rrfield))));
-    return Operation{AccessKey{},
-                     Assignment{AccessKey{}, raw(nwf(std::move(lfield))), rhs}};
+    auto rhs = arith::Fab::sum(
+        arith::Fab::mul(asign(rlsign),
+                        arith::Fab::str(nwf(std::move(rlfield)))),
+        arith::Fab::mul(asign(rrsign),
+                        arith::Fab::str(nwf(std::move(rrfield)))));
+    return Operation{AccessKey{}, raw(nwf(std::move(lfield))), rhs};
   }
 
   static inline auto op_gain(string lfield, int rlsign, string rlfield,
                              double val) -> Operation {
-    auto rhs =
-        raw(format("{} * {} * {}", rlsign, nwf(std::move(rlfield)), val));
-    return Operation{AccessKey{},
-                     Assignment{AccessKey{}, raw(nwf(std::move(lfield))), rhs}};
+    auto rhs = arith::Fab::mul(
+        asign(rlsign), arith::Fab::mul(arith::Fab::str(nwf(std::move(rlfield))),
+                                       arith::Fab::dble(val)));
+    return Operation{AccessKey{}, raw(nwf(std::move(lfield))), rhs};
   }
 
   static inline auto op_delay(string lfield, int sign,
                               string rfield) -> Operation {
     return Operation{
-        AccessKey{},
-        Assignment{AccessKey{}, raw(nwf(std::move(lfield))),
-                   raw(format("{} * {}", sign, nwf(std::move(rfield))))}};
-  }
+        AccessKey{}, raw(nwf(std::move(lfield))),
+        arith::Fab::mul(asign(sign), arith::Fab::str(nwf(std::move(rfield))))};
+  };
 
   static inline auto init_field(string field, const double val) -> InitField {
     return InitField{AccessKey{},
@@ -91,16 +93,25 @@ public:
   }
 
 private:
+  static inline auto asign(int sign) -> core::arith::AExpr {
+    return (1 == sign) ? core::arith::AExpr{arith::Fab::one()}
+                       : core::arith::AExpr{arith::Fab::mone()};
+  }
+
   static inline auto
   generated_init(RangeOf<InitField> auto &&init_fields) -> FunDecl {
     return fun_decl(raw("void"), "nwocg_generated_init",
-                    init_fields | std::views::transform(&InitField::value));
+                    init_fields | views::transform(&InitField::value));
   }
 
   static inline auto
   generated_step(RangeOf<Operation> auto &&step_fields) -> FunDecl {
     return fun_decl(raw("void"), "nwocg_generated_step",
-                    step_fields | std::views::transform(&Operation::value));
+                    step_fields | views::transform([](const Operation &op) {
+                      auto rhs =
+                          arith::Fab::to_string(arith::Fab::simplify(op.rhs));
+                      return Assignment{AccessKey{}, op.lhs, raw(rhs)};
+                    }));
   }
 
   static inline auto nwf(string f) -> string { return "nwocg." + f; }

@@ -1,12 +1,15 @@
 #pragma once
+#include <c-gen/target/core/arith.hpp>
 #include <c-gen/target/core/ast.hpp>
 
 namespace cgen::target::api {
 using namespace core;
 
 struct Operation {
-  explicit Operation(AccessKey, Assignment value) : value(std::move(value)) {}
-  Assignment value;
+  explicit Operation(AccessKey, Expr lhs, arith::AExpr rhs)
+      : lhs(std::move(lhs)), rhs(std::move(rhs)) {}
+  Expr lhs;
+  arith::AExpr rhs;
 };
 
 struct InitField {
